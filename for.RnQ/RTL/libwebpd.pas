@@ -54,9 +54,13 @@ Uses
 Const
 {$IFDEF FPC}
    {$if defined(Windows)}
-   clibWebpName = 'libwebp.dll';
+   clibWebpName = {$IFDEF CPUX64}'libwebp-x64.dll';{$ELSE}'libwebp.dll';{$ENDIF}
+//   clibWebpName = 'libwebp.dll';
    clibWebpName2 = 'libwebp-7.dll';
    libWebpName = 'libwebp-7.dll';
+   {$IFDEF CPUX64}
+     clibWebpName3 = 'libwebp.dll';
+   {$ENDIF}
    {$elseif defined(darwin)}
    libWebpName = 'libwebp.7.dylib';
    {$elseif defined(linux)}
@@ -65,8 +69,11 @@ Const
    libWebpName = 'libwebp.so.7';
    {$endif}
 {$ELSE ~FPC}
-   clibWebpName = 'libwebp.dll';
+   clibWebpName = {$IFDEF CPUX64}'libwebp-x64.dll';{$ELSE}'libwebp.dll';{$ENDIF}
    clibWebpName2 = 'libwebp-7.dll';
+ {$IFDEF CPUX64}
+   clibWebpName3 = 'libwebp.dll';
+ {$ENDIF}
 {$ENDIF FPC}
 
 Type

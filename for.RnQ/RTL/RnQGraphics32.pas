@@ -21,6 +21,7 @@ uses
   Graphics,
   Forms,
   Controls,
+  RDFileUtil,
   RDGlobal
   ;
 
@@ -295,7 +296,6 @@ implementation
  {$IFDEF RNQ}
    RnQGlobal,
  {$ENDIF RNQ}
-   RDFileUtil,
     litegif1,
     cgJpeg,
     uIconStream

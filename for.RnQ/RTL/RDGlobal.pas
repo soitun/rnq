@@ -189,15 +189,19 @@ type
   TPAFormat = (PA_FORMAT_UNK, PA_FORMAT_BMP, PA_FORMAT_JPEG,
                PA_FORMAT_GIF, PA_FORMAT_PNG, PA_FORMAT_XML,
                PA_FORMAT_SWF, PA_FORMAT_ICO,
-               PA_FORMAT_TIF, PA_FORMAT_WEBP, PA_FORMAT_HEIF, PA_FORMAT_HEIC // From WIC
+               PA_FORMAT_TIF, PA_FORMAT_WEBP, PA_FORMAT_HEIF, PA_FORMAT_HEIC, // From WIC
+               PA_FORMAT_JPEGXL
                );
 
 const
-  PAFormat: array [TPAFormat] of string = ('.dat','.bmp','.jpeg','.gif','.png', '.xml', '.swf', '.ico', '.tif', '.webp', '.heif', '.heic');
-  PAFormatString: array [TPAFormat] of string = ('Unknown', 'Bitmap', 'JPEG', 'GIF', 'PNG', 'XML', 'SWF', 'ICON', 'TIF', 'WEBP', 'HEIF', 'HEIC');
+  PAFormat: array [TPAFormat] of string = ('.dat','.bmp','.jpeg','.gif','.png', '.xml', '.swf', '.ico', '.tif', '.webp', '.heif', '.heic', '.jxl');
+  PAFormatString: array [TPAFormat] of string = ('Unknown', 'Bitmap', 'JPEG', 'GIF', 'PNG', 'XML', 'SWF', 'ICON', 'TIF', 'WEBP', 'HEIF', 'HEIC', 'JPEG-XL');
   PAFormatMime: array [TPAFormat] of string = ('image/x-icon', 'image/bmp', 'image/jpeg',
-          'image/gif','image/png', 'text/xml', 'application/x-shockwave-flash', 'image/x-icon', 'image/tiff', 'image/webp', 'image/heif', 'image/heic');
+          'image/gif','image/png', 'text/xml', 'application/x-shockwave-flash', 'image/x-icon',
+          'image/tiff', 'image/webp', 'image/heif', 'image/heic',
+          'image/jxl');
 
+  notCompressableExt: array of String = ['.7z', '.zip', '.rar', '.xlsx', '.docx', '.xz', '.mp3', '.mp4', '.mkv', '.ogg', '.webm', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.jxl', '.heif'];
 
 const
   CrLf           = AnsiString(#13#10);
@@ -208,7 +212,8 @@ const
 //  CRLFCRLF: AnsiString = AnsiString(#13#10#13#10);
   NL = #10;
   HexChars = ['A'..'F', 'a'..'f', '0'..'9'];
-  yesno: array [boolean] of AnsiString=('No','Yes');
+//  yesno: array [boolean] of AnsiString=('No','Yes');
+  yesnoLower: array [boolean] of AnsiString=('no','yes');
   Def_DateTimeFormat = 'DD.MM.YYYY HH:NN:SS';
   Def_DateFormat     = 'DD.MM.YYYY';
 
@@ -236,6 +241,41 @@ const
  {$IFDEF FMX}
   function MulDiv(nNumber, nNumerator, nDenominator: Integer): Integer;
  {$ENDIF FMX}
+
+ {$IFNDEF USE_MORMOT}
+type
+ TRawByteStringStream = class(TStream)
+  protected
+    fPosition: Int64;
+    fDataString: RawByteString;
+    function GetSize: Int64; override;
+    procedure SetSize(NewSize: Longint); override;
+    {$ifdef FPC}
+    function GetPosition: Int64; override;
+    {$endif FPC}
+  public
+    /// initialize the storage, optionally with some RawByteString content
+    // - to be used for Read() from this memory buffer
+    constructor Create(const aString: RawByteString); overload;
+    /// read some bytes from the internal storage
+    // - returns the number of bytes filled into Buffer (<=Count)
+    function Read(var Buffer; Count: Longint): Longint; override;
+    /// append some data to the buffer
+    // - will resize the buffer, i.e. will replace the end of the string from
+    // the current position with the supplied data
+    function Write(const Buffer; Count: Longint): Longint; override;
+    /// reset the internal DataString content and the current position
+    procedure Clear;
+      {$ifdef HASINLINE}inline;{$endif}
+    /// change the current Read/Write position, within current GetSize
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    /// generic override calling the 64-bit Seek() overload
+    function Seek(Offset: Longint; Origin: Word): Longint; override;
+    /// direct low-level access to the internal RawByteString storage
+    property DataString: RawByteString
+      read fDataString write fDataString;
+  end;
+ {$ENDIF !USE_MORMOT}
 
 implementation
 {$IFNDEF FMX}
@@ -381,5 +421,106 @@ begin
 //  if TPicName is AnsiString then
     Result := String(val);
 end;
+
+{$IFNDEF USE_MORMOT}
+{$ifdef FPC}
+function TRawByteStringStream.GetPosition: Int64;
+begin
+  result := fPosition;
+end;
+{$endif FPC}
+
+function TRawByteStringStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+var
+  size: Int64;
+begin
+  if (Offset <> 0) or
+     (Origin <> soCurrent) then
+  begin
+    size := GetSize;
+    case Origin of
+      soBeginning:
+        result := Offset;
+      soEnd:
+        result := size - Offset;
+    else
+      result := fPosition + Offset; // soCurrent
+    end;
+    if result > size then
+      result := size
+    else if result < 0 then
+      result := 0;
+    fPosition := result;
+  end
+  else
+    // optimize for Delphi with no GetPosition method but Seek(0,soCurrent) call
+    result := fPosition;
+end;
+
+function TRawByteStringStream.Seek(Offset: Longint; Origin: Word): Longint;
+begin
+  result := Seek(Offset, TSeekOrigin(Origin)); // call the 64-bit version above
+end;
+
+{ TRawByteStringStream }
+
+constructor TRawByteStringStream.Create(const aString: RawByteString);
+begin
+  fDataString := aString;
+  fPosition := 0;
+end;
+
+function TRawByteStringStream.Read(var Buffer; Count: Longint): Longint;
+begin
+  if Count <= 0 then
+    result := 0
+  else
+  begin
+    result := Length(fDataString) - fPosition;
+    if result = 0 then
+      exit;
+    if result > Count then
+      result := Count;
+    Move(fDataString[fPosition+1], Buffer, result);
+    inc(fPosition, result);
+  end;
+end;
+
+function TRawByteStringStream.GetSize: Int64;
+begin
+  // faster than the TStream inherited method calling Seek() twice
+  result := length(fDataString);
+end;
+
+procedure TRawByteStringStream.SetSize(NewSize: Longint);
+begin
+  SetLength(fDataString, NewSize);
+  if fPosition > NewSize then
+    fPosition := NewSize;
+end;
+
+function TRawByteStringStream.Write(const Buffer; Count: Longint): Longint;
+var
+  needed: PtrInt;
+  p: PByte;
+begin
+  result := Count;
+  if result <= 0 then
+    exit;
+  needed := fPosition + result;
+  if needed > length(fDataString) then
+    SetLength(fDataString, needed); // resize
+  p := @fDataString[fPosition+1];
+  Move(Buffer, p^, result);
+  fPosition := needed;
+end;
+
+procedure TRawByteStringStream.Clear;
+begin
+  fPosition := 0;
+  fDataString := '';
+end;
+
+{$ENDIF !USE_MORMOT}
 
 end.

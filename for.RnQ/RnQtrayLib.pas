@@ -115,7 +115,7 @@ type
       function getwnd: HWND;
 {$ENDIF FPC}
     public
-      UsrData: pointer;  // user data
+      UsrData: Pointer;  // user data
       onEvent: TTrayEventHandle; //procedure(sender: Tobject; ev: TtrayEvent) of object;
       constructor Create(hndl: HWND; pg: PGUID = NIL);
       destructor Destroy; override;

@@ -45,7 +45,7 @@ type
 
 
 type
-  TRnQPref = class;
+  TRnQPref = Class;
 
   TPrefsEnumerator = class
   private
@@ -71,7 +71,7 @@ type
 //    function  hasMore: boolean;
 //    function  getNext: TPrefElement;
    protected
-     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+     function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult; stdcall;
      function _AddRef: Integer; stdcall;
      function _Release: Integer; stdcall;
      function getAt(const idx: integer): TPrefElement;
@@ -359,7 +359,8 @@ begin
 //  El.elem.bVal := StrNew(PAnsiChar(Val));
   El.elem.bVal := AllocMem((Length(Val)+1));
 //  CopyMemory(el.elem.bVal, @Val[1], Length(Val));
-  CopyMemory(el.elem.bVal, Pointer(Val), Length(Val));
+  if Length(Val) > 0 then
+    CopyMemory(el.elem.bVal, Pointer(Val), Length(Val));
 //{$IFNDEF UNICODE}
 //  StrCopy(so.Str, PChar(v));
 //{$ELSE UNICODE}
@@ -389,7 +390,8 @@ begin
   el.ElType := ET_Blob64;
   El.elem.rVal := AllocMem((Length(Val)+1));
 //  CopyMemory(el.elem.bVal, @Val[1], Length(Val));
-  CopyMemory(el.elem.rVal, Pointer(Val), Length(Val));
+  if Length(Val) > 0 then
+    CopyMemory(el.elem.rVal, Pointer(Val), Length(Val));
   if i<0 then
 //  Result :=
     fPrefStr.AddObject(key, el);
@@ -406,7 +408,13 @@ begin
   if i>=0 then
     begin
       el := TPrefElement(fPrefStr.Objects[i]);
-      el.Clear;
+      if el.ElType = ET_Bool then
+        begin
+          el.elem.yVal := Val;
+          Exit;
+        end
+       else
+        el.Clear;
     end
    else
     el := TPrefElement.Create;
@@ -652,7 +660,7 @@ begin
     fPrefStr.AddObject(key, el);
 end;
 
-function TRnQPref.QueryInterface(const IID: TGUID; out Obj): HResult;
+function TRnQPref.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): HResult;
 const
   E_NOINTERFACE = HResult( $80004002 );
 begin
@@ -1302,14 +1310,18 @@ begin
 end;
 
 function TRnQPref.getPrefDate(const key: String; var Val: TDateTime): Boolean;
-  function dt(l: PAnsiChar): TDateTime; {$IFDEF HAS_INLINE}inline;{$ENDIF HAS_INLINE}
+  function dtf(l: PAnsiChar): TDateTime; {$IFDEF HAS_INLINE}inline;{$ENDIF HAS_INLINE}
   var
     df: TFormatSettings;
     s: string;
   begin
    try
 //    GetLocaleFormatSettings(0, df);
+    {$IFDEF FPC}
+    df := DefaultFormatSettings;
+    {$ELSE !FPC}
     df := TFormatSettings.Create('');
+    {$ENDIF}
     df.ShortDateFormat := 'dd.mm.yyyy';
     df.DateSeparator := '.';
     s := String(Copy(l, 1, 10));
@@ -1330,7 +1342,9 @@ begin
        Result := True;
        el := TPrefElement(fPrefStr.Objects[i]);
        if el.ElType = ET_Blob then
-         Val := dt(el.elem.bVal)
+         begin
+           Val := dtf(el.elem.bVal)
+         end
         else
        if el.ElType = ET_Date then
          Val := el.elem.tVal
@@ -1352,7 +1366,11 @@ function TRnQPref.getPrefDateTime(const key: String; var Val: TDateTime): Boolea
     s: String;
   begin
 //    GetLocaleFormatSettings(0, df);
+   {$IFDEF FPC}
+    df := DefaultFormatSettings;
+   {$ELSE !FPC}
     df := TFormatSettings.Create('');
+   {$ENDIF}
 //    df.LongDateFormat := 'dd.mm.yyyy';
     df.ShortDateFormat := 'dd.mm.yyyy';
     df.DateSeparator := '.';
@@ -1485,7 +1503,7 @@ begin
                end;
     ET_Double: Str(elem.dVal : 0:4, Result);// :=  FloatToStr(elem.dVal);
     ET_Date: Result := AnsiString(FormatDateTime(Def_DateFormat, elem.tVal));
-    ET_Bool: Result := yesno[elem.yVal];
+    ET_Bool: Result := yesnoLower[elem.yVal];
     ET_Time: Result := AnsiString(FormatDateTime(Def_DateTimeFormat, elem.tVal));
   end;
 end;
@@ -1518,7 +1536,7 @@ begin
     ET_Double: Str(elem.dVal : 0:4, Result);// :=  FloatToStr(elem.dVal);
     ET_Date: Result := FormatDateTime(Def_DateFormat, elem.tVal);
     ET_Time: Result := FormatDateTime(Def_DateTimeFormat, elem.tVal);
-    ET_Bool: Result := yesno[elem.yVal];
+    ET_Bool: Result := yesnoLower[elem.yVal];
   end;
 end;
 
@@ -1536,7 +1554,7 @@ begin
                  if elem.bVal <> NIL then
 //                   StrDispose(elem.bVal);
                   FreeMemory(elem.bVal);
-//                 elem.bVal := NIL;
+                 elem.bVal := NIL;
                end;
     ET_Blob64:   begin
                  if elem.rVal <> NIL then
@@ -1689,7 +1707,7 @@ begin
                      end;
           ET_Double: Str(val0.dVal : 0:4, strA);// :=  FloatToStr(elem.dVal);
           ET_Date: strA := AnsiString(FormatDateTime(Def_DateFormat, val0.tVal));
-          ET_Bool: strA := yesno[val0.yVal];
+          ET_Bool: strA := yesnoLower[val0.yVal];
           ET_Time: strA := AnsiString(FormatDateTime(Def_DateTimeFormat, val0.tVal));
         end;
         if strA > '' then

@@ -1,6 +1,6 @@
 unit RnQ.Graphics.Utils;
-{$I ForRnQConfig.inc}
-{$I NoRTTI.inc}
+{$I ..\ForRnQConfig.inc}
+{$I ..\NoRTTI.inc}
 
 {$IFDEF FPC}
  { $DEFINE DELPHI9_UP}

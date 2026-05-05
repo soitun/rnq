@@ -13,13 +13,16 @@ uses
   procedure Base64Encode(const InBuffer; InSize: DWord; var OutBuffer);
   procedure Base64Decode(const InBuffer; InSize: DWord; var OutBuffer);
 
-  function Base64EncodeString(const InText: RawByteString): RawByteString;
-  function Base64DecodeString(const InText: RawByteString): RawByteString;
+  function Base64EncodeString(const InText: RawByteString): RawByteString; Inline;
+  function Base64DecodeString(const InText: RawByteString): RawByteString; Inline;
 
   function Base64EncodeToString(const InBuffer; InSize: DWord): AnsiString;
 
   procedure Base64EncodeBytes(const InBytes: TBytes; var OutBytes: TBytes);
   procedure Base64DecodeBytes(const InBytes: TBytes; var OutBytes: TBytes);
+
+  procedure Base64EncodeStr(const InText: RawByteString; var OutText: RawByteString);
+  procedure Base64DecodeStr(const InText: RawByteString; var OutText: RawByteString);
 
 implementation
 

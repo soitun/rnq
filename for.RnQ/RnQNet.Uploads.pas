@@ -65,10 +65,10 @@ uses
   RnQGlobal,
   RQUtil,
   RnQNet,
-  RnQNet.Uploads.Lib,
-  RnQNet.Uploads.Tar,
+  RD.Streams.Lib,
+  RD.Streams.Tar,
 {$ENDIF RNQ}
-  RnQZip,
+  RD.Zip,
   RnQDialogs
 ;
 

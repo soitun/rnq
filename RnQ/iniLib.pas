@@ -11,7 +11,7 @@ unit iniLib;
 interface
 
 uses
-  RnQZip, RnQProtocol;
+  RD.Zip, RnQProtocol;
 
 procedure beforeWindowsCreation;
 procedure afterWindowsCreation;
@@ -77,8 +77,9 @@ uses
    wpDlg,
  {$ENDIF PROTOCOL_ICQ}
 
-  OverbyteIcsWinSock,
-  OverbyteIcsSSLEAY,
+//  OverbyteIcsWinSock,
+//  OverbyteIcsSSLEAY,
+  OverbyteIcsTypes,
   history, RnQTips,
   MenuSmiles, menusUnit,
  {$IFDEF DB_ENABLED}
@@ -807,7 +808,7 @@ function getCommonCFG: AnsiString;
 begin
   result:=''
   +'auto-start-uin='   + StrToUTF8(autostartUIN) + CRLF
-  +'check-read-only='  + yesno[check4readonly]+CRLF
+  +'check-read-only='  + yesnoLower[check4readonly]+CRLF
   +'last-server-ip='   + AnsiString(lastserverIP) + CRLF
   +'last-server-addr=' + AnsiString(lastserverAddr) + CRLF
   +'users-path='       + StrToUTF8(usersPath) + CRLF

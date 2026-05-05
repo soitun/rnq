@@ -93,7 +93,8 @@ function  bool2str(const b: Boolean): RawByteString;
 // Strings
   function WideBEToUTF8(const Value: RawByteString): RawByteString;
 // function unUTF(const s: AnsiString) : AnsiString;
-  function UnUTF(const s: RawByteString): UnicodeString;
+  function UnUTF(const s: TBytes): UnicodeString; OverLoad;
+  function UnUTF(const s: RawByteString): UnicodeString; OverLoad;
   function UTF(const s: String): RawByteString; inline; deprecated 'Use UTF8Encode instead';
   function StrToUTF8(const Value: AnsiString): RawByteString; OverLoad;
   function StrToUnicode(const Value: AnsiString): RawByteString; overload;
@@ -127,6 +128,7 @@ function  bool2str(const b: Boolean): RawByteString;
   function  findInStrings(const s: AnsiString; ss: Tstrings): Integer; overload;
  {$ENDIF UNICODE}
   function  findInStrings(const s: AnsiString; ss: array of AnsiString): Integer; overload;
+  function  findInStrings(const s: UnicodeString; ss: array of UnicodeString): Integer; overload;
   function  findInStrings(const s: AnsiString; ss, separator: RawByteString): Integer; overload;
   function  findInStrings(const s: UnicodeString; ss: Tstrings): Integer; overload;
 
@@ -135,7 +137,8 @@ function  bool2str(const b: Boolean): RawByteString;
   function  chop(const ss: RawByteString; var s: RawByteString): RawByteString; overload;
   function  chopline(var s: RawByteString): RawByteString; overload;
   function  choplineV(const s: RawByteString; var pos0: Integer): RawByteString;
-  function  chopCRLFV(const s: RawByteString; var pos0: Integer): RawByteString;
+  function  chopCRLFVR(const s: RawByteString; var pos0: Integer): RawByteString;
+  function  chopCRLFV(const s: String; var pos0: Integer): String;
   function  chop(const ss: RawByteString; var s: AnsiString): RawByteString; overload;
   function  chop(i, l: Integer; var s: AnsiString): AnsiString; overload;
 
@@ -218,6 +221,31 @@ function  bool2str(const b: Boolean): RawByteString;
   function bmp2ico24(bitmap: Tbitmap): HICON;
   procedure ico2bmp2(pIcon: HIcon; bmp: TBitmap);
  {$ENDIF ~FMX}
+
+const
+  /// Windows file APIs have hardcoded MAX_PATH = 260 :(
+  // - but more than 260 chars are possible with the \\?\..... prefix
+  // or by disabling the limitation in registry since Windows 10, version 1607
+  // https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
+  // - extended-length path allows up to 32,767 widechars in theory, but 2047
+  // widechars seems big enough in practice e.g. with NTFS - POSIX uses 4096
+  W32_MAX = 2047;
+
+type
+  /// 4KB stack buffer for no heap allocation during UTF-16 path encoding or
+  // switch to extended-length on > MAX_PATH
+  TW32Temp = array[0..W32_MAX] of WideChar;
+
+/// efficiently return a PWideChar from a TFileName on all compilers
+// - without any memory allocation, and with proper Unicode support
+// - is also able to handle FileName with length > MAX_PATH, up to 2048 chars
+// - all the low-level file functions of this unit (e.g. FileCreate or FileOpen)
+// will use this function to support file names longer than MAX_PATH
+  function W32(const FileName: TFileName; var Temp: TW32Temp; DoCopy: boolean = false): PWideChar;
+
+  function FileOpenSequentialRead(const FileName: TFileName): integer;
+  function sizeOfFile(const fn: String): Int64;
+  function loadFileA(const fn: String): RawByteString;
 
 { $IFNDEF UNICODE }
 var
@@ -904,7 +932,8 @@ asm
         //MOV       AL, $FF
         ROR       EAX,8
 end;
-{$ELSE}
+{$ELSE FPC}
+ {$IFDEF INTEL}
 function ABCD_ADCB(d: dword): dword; assembler;
  asm
   mov EAX, d
@@ -914,7 +943,14 @@ function ABCD_ADCB(d: dword): dword; assembler;
   ror AX, 8
   rol EAX, 8
 end; // ABCD_ADCB
-{$ENDIF}
+ {$ELSE !INTEL}
+function ABCD_ADCB(d: dword): dword;
+begin
+ Result := d AND $FF00FF00 OR ((d and $FF) shl 16) or ((d and $FF0000) shr 16);
+
+end; // ABCD_ADCB
+  {$ENDIF INTEL}
+{$ENDIF FPC}
 
  { $IFDEF UNICODE}
 function color2strU(color: Tcolor): UnicodeString;
@@ -1694,7 +1730,7 @@ asm
 @exit:
 end;}
 
-function UTF8ToStrSmart3(const Value: RawByteString): UnicodeString;
+function UTF8ToStrSmart3(const Value: RawByteString): UnicodeString; OverLoad;
 var
   Len: cardinal;
 
@@ -1845,6 +1881,194 @@ begin
   until i>Len;
   dec(j);
   if j<Len then SetLength(Result,j);
+end;
+
+function UTF8ToStrSmart3(const Value: TBytes): UnicodeString; OverLoad;
+var
+  Len: cardinal;
+
+  procedure error;
+  begin
+    MultiByteToWideChar(RnQDefaultSystemCodePage, 0, @Value[1], Len, @Result[1], Len);
+  end;
+
+var
+  i,
+  j,
+  k: cardinal;
+ {$IFDEF FPC}
+  pc: PUnicodeChar;
+ {$ELSE ~FPC}
+  pc: PChar;
+ {$ENDIF FPC}
+  c: byte;
+  tmp: word;
+//  tmp4: DWORD;
+//  tmp4: ShortString;
+  tmp4: TBytes;
+ {$ifdef FPC}
+  tmpU: UnicodeString;
+ {$ENDif FPC}
+begin
+  if Length(Value)=0 then
+  begin
+    Result:= '';
+    exit;
+  end;
+  Len := Length(Value);
+  SetLength(Result, Len);
+  pc := @Result[1];
+  i := 0;
+  j := 1;
+  repeat
+    c := byte(Value[i]);
+    inc(i);
+    if (c and $80)=0 then begin   //Символ с кодом 0..127
+//      Result[j]:=chr(c);
+//      Result[j]:= Char(c);
+      pc^ := Char(c);
+      inc(j);
+      inc(pc);
+      continue;
+    end;
+//    if ((c shr 1)=$7E) or ((c shr 2)=$3E) or ((c shr 3)=$1E) then begin
+    //  1111110x            111110xx            11110xxx
+
+    if ((c shr 1)=$7E) or ((c shr 2)=$3E) then begin // Upd 2016
+    //  1111110x            111110xx
+
+      error;
+      exit;
+    end;
+//>>> Added 2016 for Emoji
+    if (c shr 3)=$1E {11110xxx} then begin    //Символ занимает 4 байта
+      if Len<(1+i+1) then               //Строка кончилась?
+        if i+1=2 then begin
+          error;
+          exit;
+        end
+        else break;
+//      tmp4:= c and $7;                         // 3 младших бита
+      SetLength(tmp4, 4);
+      tmp4[1]:= Value[i-1];
+      for k := 1 to 3 do begin
+        c := byte(Value[i]);
+        inc(i);
+        if (c shr 6)<>2 then begin           //10xxxxxx
+          error;
+          exit;
+        end;
+//        tmp4 := (tmp4 shl 6) or (c and $3F);     //Добавляем 6 бит в конец
+        tmp4[k+1] := Value[i-1];
+      end;
+      {$ifdef FPC}
+      widestringmanager.Ansi2UnicodeMoveProc(@tmp4[1],
+        CP_UTF8, tmpU, 4); //len - j);
+      Move(Pointer(tmpU)^,pc^,length(tmpU)*2);
+      k := length(tmpU);
+      {$else}
+      k := Cardinal(UnicodeFromLocaleChars(CP_UTF8, 0, @tmp4[1], 4, pc, len - j));
+      {$ENDIF}
+
+      if k > 0 then
+         begin
+          inc(j, k);
+          inc(pc, k);
+         end
+       else
+        begin
+          error;
+          exit;
+        end;
+
+      continue;
+    end;
+//<<< Added 2016 for Emoji
+    if (c shr 4)=$E {1110xxxx} then begin    //Символ занимает 3 байта
+      if Len<(1+i+1) then               //Строка кончилась?
+        if i+1=2 then begin
+          error;
+          exit;
+        end
+        else break;
+      tmp:=c and $F;                         // 4 младших бита
+      for k := 1 to 2 do begin
+        c := byte(Value[i]);
+        inc(i);
+        if (c shr 6)<>2 then begin           //10xxxxxx
+          error;
+          exit;
+        end;
+        tmp := (tmp shl 6) or (c and $3F);     //Добавляем 6 бит в конец
+      end;
+//      Result[j]:=chr(tmp);
+      inc(j);
+      pc^ := WideChar(tmp);
+      inc(pc);
+      continue;
+    end;
+    if (c shr 5)=6 {110xxxxx} then begin     //Символ занимает 2 байта
+      if i+1>Len then
+        if i+1=2 then begin
+          error;
+          exit;
+        end
+        else break;
+      tmp := word(c and $1F) shl 6; // 5 младших битов
+      c := byte(Value[i]);
+      inc(i);
+      if (c shr 6)<>2 then begin      //10xxxxxx
+        error;
+        exit;
+      end;
+      tmp := tmp or (c and $3F);
+//      Result[j]:=chr(tmp);
+      inc(j);
+      //pc^ := chr(tmp);
+      pc^ := WideChar(tmp);
+      inc(pc);
+    end
+    else begin
+      error;
+      exit;
+    end;
+  until i+1>Len;
+  dec(j);
+  if j<Len then SetLength(Result,j);
+end;
+
+function UnUTF(const s: TBytes): UnicodeString;
+{$IFNDEF UNICODE}
+var
+//  ss: RawString;
+  ss: RawByteString;
+{$ENDIF UNICODE}
+begin
+//  result := s;
+  if (Length(s) > 1)
+     and ((s[1] < 5)or(s[2] < 5) or((s[1] = 255)and (s[2] = 254)))
+     and not odd(Length(s)) then
+   begin
+   {$IFDEF UNICODE}
+     Result := PWideChar(@s[1]);
+     if (s[1] < 5) then
+      begin
+//        StrSwapByteOrder(PWideChar(result));
+//        SwapShort(@Result[1], ByteLength(Result));
+        SwapWordByteOrder(PAnsiChar(@Result[1]), ByteLength(Result));
+      end;
+   {$ELSE nonUNICODE}
+     ss := s;
+     if (ss[1] < #5) then
+//      StrSwapByteOrder(PWideChar(ss));
+//       SwapShort(@ss[1], Length(ss));
+       SwapWordByteOrder(PAnsiChar(ss), Length(ss));
+     result := WideCharToString(PWidechar(ss));
+   {$ENDIF UNICODE}
+   end
+   else
+//    result := UTF8ToStrSmart(s);
+    result := UTF8ToStrSmart3(s);
 end;
 
 function UnUTF(const s: RawByteString): UnicodeString;
@@ -2228,6 +2452,17 @@ end; // findInStrings
  {$ENDIF UNICODE}
 
 function findInStrings(const s: AnsiString; ss: array of AnsiString): Integer;
+begin
+  result := 0;
+  while result < length(ss) do
+    if ss[result] = s then
+      exit
+    else
+      inc(result);
+  result := -1;
+end; // findInStrings
+
+function  findInStrings(const s: UnicodeString; ss: array of UnicodeString): Integer;
 begin
   result := 0;
   while result < length(ss) do
@@ -2743,7 +2978,7 @@ begin
   pos0 := Length(s)+1;
 end; // chopline
 
-function  chopCRLFV(const s: RawByteString; var pos0: Integer): RawByteString;
+function  chopCRLFVR(const s: RawByteString; var pos0: Integer): RawByteString;
 var
   i, l: Integer;
 begin
@@ -2777,7 +3012,43 @@ begin
 //      end;
   result := Copy(s, pos0);
   pos0 := Length(s)+1;
-end; // chopline
+end; // chopCRLFVR
+
+function  chopCRLFV(const s: String; var pos0: Integer): String;
+var
+  i, l: Integer;
+begin
+  l := Length(s);
+  if pos0 < 1 then
+    pos0 := 1;
+  if pos0 < l then
+    for i := pos0 to l do
+//      case s[i] of
+//        #10:
+//          begin
+//            result := Copy(s, pos0, i-pos0);
+//            pos0 := i+1;
+//            exit;
+//          end;
+//        #13:
+      if s[i] = #13 then
+          begin
+            if (i < length(s)) and (s[i+1]=#10) then
+              begin
+                result := Copy(s, pos0, i-pos0);
+                pos0 := i+2;
+              end
+             else
+              begin
+                result := Copy(s, pos0, i-pos0);
+                pos0 := i+1;
+              end;
+            exit;
+          end;
+//      end;
+  result := Copy(s, pos0);
+  pos0 := Length(s)+1;
+end; // chopCRLFV
 
  {$IFDEF UNICODE}
 function chop(i, l: Integer; var s: UnicodeString): UnicodeString;
@@ -3025,6 +3296,159 @@ begin
   bmp.Transparent := True;
 end;
 {$ENDIF FMX}
+
+
+function IsExtendedPathName(Name: PWideChar): boolean;
+begin
+  result := (Name <> nil) and
+            (Name[0] = '\') and
+            (Name[1] = '\') and
+            (Name[2] = '?') and
+            (Name[3] = '\');
+end;
+
+procedure ExtendedPathName(Name: PWideChar; Len: PtrInt; var Temp: TW32Temp);
+var
+  fp: PWideChar;
+begin
+  Len := Len * 2 + 2; // in bytes, +2 to include ending #0
+  if (Len <= MAX_PATH * 2) or
+     ((Len <= SizeOf(Temp) - 8) and
+      IsExtendedPathName(Name)) then
+  begin
+    Move(Name^, Temp[0], Len); // we can use the supplied UTF-16 file name
+    exit;
+  end;
+  // need to switch to extended-length path
+  Temp[0] := #0;
+  if Len > SizeOf(Temp) - 8 then
+    exit; // avoid buffer overflow
+  // append the full path name to the \\?\ prefix
+  Temp[0] := '\';
+  Temp[1] := '\';
+  Temp[2] := '?';
+  Temp[3] := '\';
+  if ((ord(Name[0]) in [ord('A')..ord('Z'), ord('a')..ord('z')]) and
+      (Name[1] = ':')) or
+     (GetFullPathNameW(Name, high(Temp) - 4, @Temp[4], fp) = 0) then
+    Move(Name^, Temp[4], Len);
+end;
+
+{$ifdef UNICODE}
+
+function W32(const FileName: TFileName; var Temp: TW32Temp; DoCopy: boolean): PWideChar;
+var
+  len: PtrInt;
+begin
+  result := pointer(FileName);
+  len := length(FileName);
+  if (len = 0) or
+     ((len < MAX_PATH) and
+      not DoCopy) then
+    exit; // most common case could direclty use FileName[] UTF-16 content
+  ExtendedPathName(pointer(FileName), len, Temp);
+  result := @Temp;
+end;
+
+procedure Win32PWideCharToFileName(P: PWideChar; out fn: TFileName);
+begin
+  SetString(fn, P, StrLen(P)); // TFileName is UnicodeString
+end;
+
+{$else}
+
+procedure W32Convert(const FileName: TFileName; var Temp: TW32Temp);
+var
+  u: SynUnicode;
+begin
+  u := SynUnicode(FileName); // let the RTL do the conversion
+  ExtendedPathName(pointer(u), length(u), Temp);
+end;
+
+function W32(const FileName: TFileName; var Temp: TW32Temp; DoCopy: boolean): PWideChar;
+var
+  i, len: PtrInt;
+begin
+  result := nil;
+  if FileName = '' then
+    exit;
+  len := length(FileName);
+  if (len < MAX_PATH) and
+     IsAnsiCompatible(pointer(FileName), len) then
+    // most common cases do not need any Unicode conversion
+    for i := 0 to len do // includes #0 terminator
+      PWordArray(@Temp)[i] := PByteArray(FileName)[i]
+  else
+    // use a temporary SynUnicode variable for complex UTF-16 conversion
+    // or if MAX_PATH is reached and \\?\ prefix is needed for extended-length
+    W32Convert(FileName, Temp);
+  result := @Temp;
+end;
+{$ENDIF Unicode}
+function FileOpenSequentialRead(const FileName: TFileName): integer;
+var
+  tmp: TW32Temp;
+begin
+  result := CreateFileW(W32(FileName, tmp), GENERIC_READ,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING,
+    FILE_FLAG_SEQUENTIAL_SCAN, 0);
+end;
+
+function sizeOfFile(const fn: String): Int64;
+type
+  PInt64Rec = ^Int64Rec;
+var
+//  f: file;
+//  bak: integer;
+//  ff: Cardinal;
+  FA: WIN32_FILE_ATTRIBUTE_DATA;
+begin
+//  ff := OpenFile(fn, )
+//  size := GetFileSize(ff, 0);
+//  CloseHandle(ff);
+(*
+  IOresult;
+  assignFile(f,fn);
+  bak := fileMode;
+  filemode := 0;
+  {$I-}
+  reset(f, 1);
+  filemode := bak;
+  result := FileSize(f);
+  closeFile(f);
+  if IOresult<>0 then
+    result := -1;
+*)
+  // Took from mormot2
+  // 5 times faster than CreateFile, GetFileSizeEx, CloseHandle
+  if GetFileAttributesEx(pointer(fn), GetFileExInfoStandard, @FA) then
+  begin
+//    PInt64Rec(@result)^.Lo := FA.nFileSizeLow;
+//    PInt64Rec(@result)^.Hi := FA.nFileSizeHigh;
+    result := Int64(fa.nFileSizeLow) or Int64(fa.nFileSizeHigh shl 32);
+  end
+  else
+    result := 0;
+end; // sizeOfFile
+
+function  loadFileA(const fn: String): RawByteString;
+var
+ fs : TFileStream;
+begin
+  result:='';
+  if not FileExists(fn) then exit;
+  try
+    fs := TFileStream.Create(fn, fmOpenRead or fmShareDenyNone);
+    setLength(result, fs.Size);
+    if fs.Size > 1 then
+      fs.Read(Pointer(result)^, length(result))
+     else
+      result := '';
+    fs.Free;
+  except
+    result := '';
+  end;
+end; // loadFile
 
 
 { $IFNDEF UNICODE }

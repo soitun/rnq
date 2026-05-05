@@ -96,7 +96,7 @@ uses
 type
   {$IFNDEF USE_MORMOT_COLLECTIONS}
   TEmojiContent = TDictionary<Integer, TEmojiContArr>;
-  TEmojiKey: TPair<Cardinal, Cardinal>;
+  TEmojiKey = TPair<Cardinal, Cardinal>;
   TEmojis = TDictionary<TEmojiKey, Integer>;
   TEmojiList = TDictionary<String, TPicName>;
   {$ELSE USE_MORMOT_COLLECTIONS}

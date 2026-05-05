@@ -1,4 +1,4 @@
-unit RnQNet.Uploads.Lib;
+unit RD.Streams.Lib;
 {$I forRnQConfig.inc}
 {$I NoRTTI.inc}
 
@@ -17,19 +17,21 @@ type
     aHTTPHeader: RawByteString;
     procedure invalidate();
     procedure calculate(); virtual; abstract;
-    function getTotal(): int64;
+    function getTotal(): int64; Virtual; // Not always can calculate total size
   public
     flist: array of record
       src,          // full path of the file on the disk
       dst: string;  // full path of the file in the archive
-      firstByte,    // offset of the file inside the archive
-      mtime,
+      HDRfirstByte,    // offset of the file META Info inside the archive
+      dataFirstByte,   // offset of the file DATA inside the archive
+//      mtime,
       size: int64;
+      fTime: TDateTime;
       data: Tobject;  // extra data
      end;
     onDestroy: TNotifyEvent;
 
-    constructor create;
+    constructor Create;
     destructor  Destroy; override;
     function   addFile(const src: string; dst: string=''; data: Tobject=NIL): boolean; virtual;
     function   count(): integer;
@@ -45,14 +47,9 @@ uses
 {$IFDEF UNICODE}
   AnsiStrings,
 {$ENDIF UNICODE}
-  RDFileUtil, RDUtils
+//  RDFileUtil,
+  RDUtils
 ;
-
-function InputText(Boundry, Name, Value: RawByteString): RawByteString;
-begin
-  result := format(AnsiString(RawByteString('%s') + CRLF + 'Content-Disposition: form-data; name="%s"' + CRLF + CRLF + '%s' + CRLF),
-            [AnsiString('--') + boundry, name, value]);
-end;
 
 //////////// TarchiveStream
 
@@ -72,9 +69,18 @@ function TarchiveStream.addFile(const src: string; dst: string=''; data: Tobject
   begin
     getFileTime(fh, @ctime, @atime, @mtime);
     fileTimeToSystemTime(mtime, st);
-    result:=dateTimeToUnix(SystemTimeToDateTime(st));
+    result := dateTimeToUnix(SystemTimeToDateTime(st));
   end; // getMtime
 
+  function getFtime(fh: Thandle): TDateTime;
+  var
+    ctime, atime, mtime: Tfiletime;
+    st: TSystemTime;
+  begin
+    getFileTime(fh, @ctime, @atime, @mtime);
+    fileTimeToSystemTime(mtime, st);
+    Result := SystemTimeToDateTime(st);
+  end; // getFTime
 var
   i, fh: integer;
 begin
@@ -87,13 +93,15 @@ begin
     dst := extractFileName(src);
   i := length(flist);
   setLength(flist, i+1);
+  flist[i].fTime := getFtime(fh);
+//  flist[i].mtime := getMtime(fh);
+  fileClose(fh);
   flist[i].src := src;
   flist[i].dst := dst;
   flist[i].data := data;
   flist[i].size := sizeOfFile(src);
-  flist[i].mtime := getMtime(fh);
-  flist[i].firstByte := -1;
-  fileClose(fh);
+  flist[i].HDRfirstByte := -1;
+  flist[i].DatafirstByte := -1;
   invalidate();
 end; // addFile
 

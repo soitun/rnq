@@ -10,7 +10,7 @@ interface
 uses
    Windows, RDGlobal,
  {$IFDEF USE_ZIP}
-  RnQZip,
+  RD.Zip,
  {$ENDIF USE_ZIP}
  {$IFDEF USE_RAR}
 //   ztvUnRar,
@@ -394,16 +394,15 @@ function RARCallbackProc(msg: UINT; UserData, P1, P2: integer) :integer; stdcall
     end;
   end;
 {$ENDIF USE_RAR}
-function  loadFile(pt: TThemeSourcePath; fn: string; var ResStream: TStream):Boolean;
+function  loadFile(pt: TThemeSourcePath; fn: string; var ResStream: TStream): Boolean;
   function fullpath(const fn: string): string;
   begin if ansipos(':',fn)=0 then result:=pt.path+fn else result:=fn end;
    { $IFDEF USE_ZIP}
 var
-//  ZipStream : TMemoryStream;
-  tStr : TStream;
-  i : Integer;
+  tStr: TStream;
+  i: Integer;
    {$IFDEF USE_7Z}
-  isFound : Boolean;
+  isFound: Boolean;
    {$ENDIF USE_7Z}
    { $ENDIF USE_ZIP}
    {$IFDEF USE_RAR}
@@ -787,7 +786,7 @@ begin
   end;
 end; // loadFile
 }
-function  loadFileA(const fn: string): RawByteString; overload;
+function loadFileA(const fn: string): RawByteString; overload;
 var
  fs : TFileStream;
 begin
@@ -1146,7 +1145,7 @@ end;
 function DetectFileFormatStream(str: TStream): TPAFormat;
 var
 //  s: String;
-  s: TMimeChunk;
+  s, s2: TMimeChunk;
 begin
   str.Seek(0, soBeginning);
 //  str.Position := 0;
@@ -1181,6 +1180,16 @@ begin
          else if s = 'WEBP' then
           Result := PA_FORMAT_WEBP;
     end
+  else if (s[0]=#$FF) and (s[1]=#$0A) then
+    Result := PA_FORMAT_JPEGXL
+  else if (s[0]=#$00) and (s[1]=#$00) and (s[2]=#$00) and (s[3]=#$0C) then
+    begin
+      if str.Read(s2, 4) = 4 then
+        if s2='JXL ' then
+          Result := PA_FORMAT_JPEGXL
+    end;
+    ;
+
 //  else
 //    Result := PA_FORMAT_UNK;
 end;

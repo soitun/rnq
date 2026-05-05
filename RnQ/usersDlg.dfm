@@ -18,7 +18,7 @@ object usersFrm: TusersFrm
   OnKeyDown = FormKeyDown
   OnPaint = FormPaint
   OnShow = FormShow
-  TextHeight = 20
+  TextHeight = 15
   object P1: TPanel
     Left = 178
     Top = 0
@@ -133,7 +133,7 @@ object usersFrm: TusersFrm
     Align = alClient
     Header.AutoSizeIndex = 0
     Header.DefaultHeight = 17
-    Header.Height = 20
+    Header.Height = 15
     Header.MainColumn = -1
     Header.Options = [hoColumnResize, hoDrag]
     TabOrder = 0

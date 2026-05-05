@@ -497,13 +497,13 @@ type
     {The STREAMs bellow are only needed in case delphi provided ones is not}
     {avaliable (UseDelphi trigger not set)}
     {Object becomes handles}
-    TCanvas = THandle;
+  TCanvas = THandle;
 //    TBitmap = HBitmap;
-    {Trick to work}
-    TPersistent = TObject;
+  {Trick to work}
+  TPersistent = TObject;
 
-    {Base class for all streams}
-    TStream = class
+  {Base class for all streams}
+  TStream = class
     protected
       {Returning/setting size}
       function GetSize: Longint; virtual;
@@ -526,12 +526,12 @@ type
       function Seek(Offset: Longint; Origin: Word): Longint; virtual; abstract;
     end;
 
-    {File stream modes}
-    TFileStreamMode = (fsmRead, fsmWrite, fsmCreate);
-    TFileStreamModeSet = set of TFileStreamMode;
+  {File stream modes}
+  TFileStreamMode = (fsmRead, fsmWrite, fsmCreate);
+  TFileStreamModeSet = set of TFileStreamMode;
 
-    {File stream for reading from files}
-    TFileStream = class(TStream)
+  {File stream for reading from files}
+  TFileStream = class(TStream)
     private
       {Opened mode}
       Filemode: TFileStreamModeSet;
@@ -551,8 +551,8 @@ type
       destructor Destroy; override;
     end;
 
-    {Stream for reading from resources}
-    TResourceStream = class(TStream)
+  {Stream for reading from resources}
+  TResourceStream = class(TStream)
       constructor Create(Instance: HInst; const ResName: String; ResType:PChar);
     private
       {Variables for reading}
@@ -1464,7 +1464,7 @@ end;
 {$ELSE}
 {Invert bytes using assembly}
 function ByteSwap(const a: integer): integer;
-{$IFDEF PUREPASCAL OR FPC}
+{$IFDEF PUREPASCAL OR FPC or WIN64CE}
 begin
   PByte(@Result)[0] := PByte(@A)[3];
   PByte(@Result)[1] := PByte(@A)[2];
@@ -7482,6 +7482,7 @@ var
   lastDisposeOp: Byte;
   lastFrameRect: TRect;
   bf: {$IFDEF FPC}JwaWinGDI.{$ENDIF} BLENDFUNCTION;      // structure for alpha blending
+  brF: HBrush;
 begin
   rBMP := TBitmap.Create;
   Result := rBMP;
@@ -7576,7 +7577,11 @@ begin
               vDC, 0, FImageHeight*j, FImageWidth, FImageHeight,
               SRCCOPY)
           else
-           FillRect(vDC, Rect(0, l_Top, FImageWidth, l_Top + FImageHeight), CreateSolidBrush(0));
+           begin
+             brF := CreateSolidBrush($00000000);
+             FillRect(vDC, Rect(0, l_Top, FImageWidth, l_Top + FImageHeight), brF);
+             DeleteObject(brF);
+           end
        end
       else
 //       FillRect(vDC, Rect(0, l_Top, FImageWidth, l_Top + FImageHeight), CreateSolidBrush(0));
@@ -7585,7 +7590,9 @@ begin
            StretchBlt(vDC, 0, l_Top, FImageWidth, FImageHeight,
               vDC, 0, l_Top - FImageHeight, FImageWidth, FImageHeight,
               SRCCOPY);
-         FillRect(vDC, lastFrameRect, CreateSolidBrush($00000000));
+         brF := CreateSolidBrush($00000000);
+         FillRect(vDC, lastFrameRect, brF);
+         DeleteObject(brF);
        end;
 
      lastDisposeOp := fr.FDisposeOp;

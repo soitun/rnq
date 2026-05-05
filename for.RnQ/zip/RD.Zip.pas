@@ -2,7 +2,7 @@
 This file is part of R&Q.
 Under same license
 }
-unit RnQZip;
+unit RD.Zip;
 {$I ForRnQConfig.inc}
 {$I NoRTTI.inc}
 
@@ -58,26 +58,38 @@ type
   end;
 
   TFileDescriptor = packed record
-    Crc32: DWORD; //                          4 bytes
-    CompressedSize: DWORD; //                 4 bytes
-    UncompressedSize: DWORD; //               4 bytes
+    Crc32: DWORD;                 // 4 bytes
+    CompressedSize: DWORD;        // 4 bytes
+    UncompressedSize: DWORD;      // 4 bytes
   end;
 
-  TCommonFileHeader = packed record
-    VersionNeededToExtract: WORD; //       2 bytes
-    GeneralPurposeBitFlag: WORD; //        2 bytes
-    CompressionMethod: WORD; //            2 bytes
-    LastModFileTimeDate: DWORD; //         4 bytes
-    FileDesc: TFileDescriptor;
-    FilenameLength: WORD; //               2 bytes
-    ExtraFieldLength: WORD; //             2 bytes
+  PCommonFileHeader = ^TCommonFileHeader;
+  TCommonFileHeader = packed record // 2+2+2+4+12+2+2 = 26 bytes
+    VersionNeededToExtract: WORD;  // 2 bytes
+    GeneralPurposeBitFlag: WORD;   // 2 bytes
+    CompressionMethod: WORD;       // 2 bytes
+    LastModFileTimeDate: DWORD;    // 4 bytes
+    FileDesc: TFileDescriptor;     // 4+4+4 = 12 bytes
+    FilenameLength: WORD;          // 2 bytes
+    ExtraFieldLength: WORD;        // 2 bytes
   end;
+  Tzip64ExtraData = packed record
+    Tag: WORD; { $0001 }
+    Size: WORD;
+    Uncompressed_Size: UInt64;
+    Compressed_Size: UInt64;
+    Relative_Offset: Int64;
+    DiskStart: DWORD;
+    procedure Init;
+  end;
+  Pzip64ExtraData = ^Tzip64ExtraData;
 
   TLocalFile = packed record
     LocalFileHeaderSignature: DWORD; //    4 bytes  (0x04034b50)
     CommonFileHeader: TCommonFileHeader; //
     filename: TBytes; //variable size
-    extrafield: RawByteString; //variable size
+    extraField: RawByteString; //variable size
+    fileInfo: Tzip64ExtraData;
     CompressedData: RawByteString; //variable size
     pass: AnsiString;
  { TODO -oRapid D -cIncrease load speed : Add support of "preview" loading }
@@ -163,6 +175,16 @@ type
     ZipfileCommentLength: WORD; //         2 bytes
   end;
 
+  TZipItemType = (zitFile, zitFolder, zitLink);
+
+  TZipItem = record
+    itemType: TZipItemType;
+    itemName: String;
+    itemCompressedSize: Int64;
+    itemUnCompressedSize: Int64;
+    itemLastModified: TDateTime;
+  end;
+
   TZipFile = class(TObject)
    private
     Files: array of TLocalFile;
@@ -182,10 +204,11 @@ type
     function  GetDateTime(i: integer): TDateTime;
     procedure SetDateTime(i: integer; const Value: TDateTime);
     function  GetCount: integer;
-    function  GetName(i: integer): string;
-    procedure SetName(i: integer; const Value: string);
+    function  GetName(i: integer): String;
+    procedure SetName(i: integer; const Value: String);
+    function  GetItem(i: integer): TZipItem;
   public
-    constructor create;
+    constructor Create;
     function  AddFile(const name: string; FAttribute: DWord = 0; const pPass: AnsiString = '';
                        const pData: RawByteString = ''): Integer;
     function  AddExtFile(const pFileName: String; const name: string = '';
@@ -200,6 +223,7 @@ type
     function  IsEncrypted(i: Integer): Boolean;
     function  CheckPassword(I: Integer; const pass: AnsiString): Boolean;
     property  Count: integer read GetCount;
+    property  Items[i: integer]: TZipItem read GetItem;
 //    property Uncompressed[i: integer]: AnsiString read GetUncompressed;
                                                   //write SetUncompressed;
     property Data[i: integer]: RawByteString read  GetUncompressed
@@ -380,6 +404,17 @@ end;
 function TFileHeader.UTFSupport: Boolean;
 begin
   result := Self.CommonFileHeader.GeneralPurposeBitFlag and (1 shl 11) > 0
+end;
+
+procedure Tzip64ExtraData.Init;
+begin
+  Tag := $0001;
+//  Size := 2+2+8+8+8;
+  Size := 8+8+8;
+  Uncompressed_Size := 0;
+  Compressed_Size := 0;
+  Relative_Offset := 0;
+  DiskStart := 0;
 end;
 
 function TLocalFile.UTFSupport: Boolean;
@@ -1105,8 +1140,8 @@ end;
 function TZipFile.AddExtFile(const pFileName : String; const name: string = '';
                     FAttribute: DWord = 0; const pPass: AnsiString = ''): Integer;
 var
-  buf : RawByteString;
-  lFN : String;
+  buf: RawByteString;
+  lFN: String;
 begin
   buf := loadFileA(pFileName);
   if name = '' then
@@ -1122,7 +1157,11 @@ function TZipFile.GetDateTime(i: integer): TDateTime;
 begin
   if i > High(Files) then // begin Result:=0; exit; end;
     raise Exception.Create('Index out of range.');
-  result := FileDateToDateTime(Files[i].CommonFileHeader.LastModFileTimeDate);
+  try
+    result := FileDateToDateTime(Files[i].CommonFileHeader.LastModFileTimeDate);
+   except
+    Result := MinDateTime;
+  end;
 end;
 
 procedure TZipFile.SetDateTime(i: integer; const Value: TDateTime);
@@ -1141,6 +1180,8 @@ function TZipFile.GetName(i: integer): string;
 begin
   if Files[i].UTFSupport then
     Result := TBytesToString(Files[i].filename, CP_UTF8)
+  else if Files[i].CommonFileHeader.VersionNeededToExtract <= 20 then
+    Result := TBytesToString(Files[i].filename, CP_OEM)
    else
     Result := TBytesToString(Files[i].filename, 437)
    ;
@@ -1153,6 +1194,32 @@ begin
    else
     Files[i].filename := StringToTBytes(Value, 437)
     ;
+end;
+
+function TZipFile.GetItem(i: integer): TZipItem;
+var
+  ch: Char;
+begin
+  if i > High(Files) then // begin Result:=0; exit; end;
+    raise Exception.Create('Index out of range.');
+  Result.itemName := Name[i];
+  try
+    Result.itemLastModified := FileDateToDateTime(LongInt(Files[i].CommonFileHeader.LastModFileTimeDate));
+   except
+    Result.itemLastModified := MinDateTime;
+  end;
+  Result.itemCompressedSize := Files[i].fileInfo.Compressed_Size;
+  Result.itemUnCompressedSize := Files[i].fileInfo.Uncompressed_Size;
+  Result.itemType := zitFile;
+  if Result.itemName > '' then
+    begin
+      ch := Result.itemName[Length(Result.itemName)];
+      if (ch='\') or (ch='/') then
+        Result.itemType := zitFolder
+       else
+        Result.itemType := zitFile
+       ;
+    end;
 end;
 
 function  TZipFile.IndexOf(const s: String): Integer;

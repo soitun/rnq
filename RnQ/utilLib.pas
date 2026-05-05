@@ -24,7 +24,7 @@ uses
   RnQNet, RnQProtocol, RDGlobal, RnQConst,
   AnsiClasses,
   roasterLib,
-  RnQZip,
+  RD.Zip,
   globalLib, events,
   dateutils
   ;
@@ -196,7 +196,7 @@ uses
   ExceptionLog7, ECore, ETypes,
   {$ENDIF EUREKALOG}
   Base64,
-  OverbyteIcsWSocket,
+  OverbyteIcsUtils,
   RQUtil, RnQFileUtil, RDUtils, RDSysUtils, RDFileUtil,
   RQMenuItem, RQThemes, RQLog, RnQDialogs,
   RnQLangs, RnQButtons, RnQBinUtils, RnQGlobal, RnQCrypt, RnQPics,
@@ -722,9 +722,9 @@ begin
        AnsiString('account-id=')+ StrToUTF8(pr.getMyInfo.UID2cmp) +CRLF+
        AnsiString('account-name=')+ StrToUTF8(pr.getMyInfo.displayed)
  {$IFDEF UseNotSSI}
-      +CRLF+ AnsiString('use-ssi=') + yesno[useSSI2]
+      +CRLF+ AnsiString('use-ssi=') + yesnoLower[useSSI2]
  {$ELSE UseNotSSI}
-      +CRLF+AnsiString('use-ssi=') + yesno[True]
+      +CRLF+AnsiString('use-ssi=') + yesnoLower[True]
  {$ENDIF UseNotSSI}
     ;
   AddFile2Zip(AboutFileName, cfg);
@@ -834,12 +834,12 @@ begin
 //   + 'proxy='+yesno[pProxys[i].enabled]+CRLF
     +'proxy-serv-host='+ AnsiString(pProxys[k].serv.host)+CRLF
     +'proxy-serv-port='+ IntToStrA(pProxys[k].serv.port)+CRLF
-   + 'proxy-auth='     + yesno[pProxys[k].auth]+CRLF
+   + 'proxy-auth='     + yesnoLower[pProxys[k].auth]+CRLF
    + 'proxy-user='     + StrToUTF8(pProxys[k].user)+CRLF
 //   + 'proxy-pass='     +passCrypt(pProxys[k].pwd)+CRLF
    + 'proxy-pass64='   +Base64EncodeString(passCrypt(UTF8Encode(pProxys[k].pwd)))+CRLF
-   + 'proxy-ntlm='     +yesno[pProxys[k].NTLM]+CRLF
-   + 'connection-ssl=' +yesno[pProxys[k].ssl]+CRLF
+   + 'proxy-ntlm='     +yesnoLower[pProxys[k].NTLM]+CRLF
+   + 'connection-ssl=' +yesnoLower[pProxys[k].ssl]+CRLF
    + 'proxy-proto='    +proxyproto2str[pProxys[k].proto]+CRLF
 {   for pp:=low(pp) to high(pp) do cfg:=cfg
      +'proxy-'+proxyproto2str[pp]+'-host='+proxyes[i].addr[pp].host+CRLF

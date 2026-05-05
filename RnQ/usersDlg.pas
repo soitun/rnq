@@ -109,7 +109,7 @@ uses
    { $ENDIF}
 //  newaccountDlg,
   RDFileUtil,
-  RnQZip, RDUtils, RDSysUtils, RnQGlobal,
+  RD.Zip, RDUtils, RDSysUtils, RnQGlobal,
   mainDlg,
   utilLib, RnQLangs, langLib, iniLib, RQUtil, RDGlobal;
 

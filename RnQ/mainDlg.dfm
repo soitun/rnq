@@ -67,8 +67,6 @@ object RnQmain: TRnQmain
     FullRepaint = False
     ParentColor = True
     TabOrder = 0
-    ExplicitTop = 337
-    ExplicitWidth = 132
     object menuBtn: TRnQSpeedButton
       Left = 0
       Top = 0
@@ -124,7 +122,6 @@ object RnQmain: TRnQmain
     BevelOuter = bvNone
     FullRepaint = False
     TabOrder = 3
-    ExplicitWidth = 132
     DesignSize = (
       142
       24)
@@ -150,7 +147,6 @@ object RnQmain: TRnQmain
       TabOrder = 0
       OnChange = FilterEditChange
       OnKeyDown = FilterEditKeyDown
-      ExplicitWidth = 105
       ExplicitHeight = 21
     end
   end
@@ -166,6 +162,7 @@ object RnQmain: TRnQmain
     ButtonStyle = bsTriangle
     BorderWidth = 1
     Colors.UnfocusedColor = clMedGray
+    DefaultNodeHeight = 13
     DragOperations = [doMove]
     Header.AutoSizeIndex = 0
     Header.Height = 13
@@ -214,7 +211,6 @@ object RnQmain: TRnQmain
     TabOrder = 2
     OnClick = MlCntBtnClick
     Spacing = 0
-    ExplicitWidth = 132
   end
   object menu: TPopupMenu
     Tag = 666

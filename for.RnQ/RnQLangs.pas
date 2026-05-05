@@ -143,7 +143,7 @@ implementation
    RnQStrings,
  {$ENDIF RNQ}
  {$IFDEF USE_ZIP}
-  RnQZip,
+  RD.Zip,
  {$ENDIF USE_ZIP}
  {$IFDEF UNICODE}
    AnsiStrings,

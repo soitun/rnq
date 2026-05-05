@@ -1023,7 +1023,7 @@ const szBassDll = 'bass.dll' + #0;
 var
   oldmode:integer;
   P: PChar;
-  s: string;
+  s: UnicodeString;
   dllfile: array[0..MAX_PATH + 1] of Char;
 begin
   Result := False;

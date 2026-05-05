@@ -88,7 +88,14 @@ type
   function  resolveLnk(const fn: UnicodeString): UnicodeString;
   procedure ResolveLinkInfo(LinkPath: UnicodeString; Handle: THandle; var ProgramPath, ProgramWorkPath, ProgramInfo, ProgramParams: UnicodeString);
 
+  function createShellLink(const linkFN: UnicodeString; const destFN: UnicodeString): Boolean;
+  function existsShellLink(linkFN: WideString): Boolean;
+  function readShellLink(linkFN: WideString): String;
+
   function  GetThumbFromCache(AFileName: UnicodeString; out Bmp: TBitmap; AMaxSize: Integer = 120): HRESULT;
+
+  function GetPEType(const APath: WideString): Byte;
+  function IsCorrectBitness(const APath: WideString): Boolean;
 
 {$IFDEF FPC}
 // // Taskbar notification definitions
@@ -1151,6 +1158,53 @@ begin
 
 end;
 
+function createShellLink(const linkFN: UnicodeString; const destFN: UnicodeString): Boolean;
+var
+  ShellObject: IUnknown;
+begin
+  shellObject := CreateComObject(CLSID_ShellLink);
+  result := ((shellObject as IShellLinkW).setPath(PWideChar(destFN)) = NOERROR)
+    and ((shellObject as IPersistFile).Save(PWideChar(linkFN), False) = S_OK)
+end; // createShellLink
+
+function existsShellLink(linkFN: WideString): Boolean;
+var
+  ShellObject: IUnknown;
+begin
+  shellObject := CreateComObject(CLSID_ShellLink);
+  if (shellObject as IPersistFile).Load(PWChar(linkFN), 0) <> S_OK then
+    Exit(False);
+  Result := True;
+end; // existsShellLink
+
+function readShellLink(linkFN: WideString): String;
+var
+  ShellObject: IUnknown;
+  pfd: _WIN32_FIND_DATAW;
+ {$IFNDEF UNICODE}
+  r: WideString;
+ {$ENDIF UNICODE}
+begin
+  shellObject := CreateComObject(CLSID_ShellLink);
+  if (shellObject as IPersistFile).Load(PWChar(linkFN), 0) <> S_OK then
+    raise Exception.create('readShellLink: cannot load');
+ {$IFNDEF UNICODE}
+  setLength(r, MAX_PATH);
+  if (shellObject as IShellLinkW).getPath(@r[1], length(result), @pfd, 0) <> NOERROR then
+ {$ELSE UNICODE}
+  setLength(result, MAX_PATH);
+  if (shellObject as IShellLinkW).getPath(@result[1], length(result), pfd, 0) <> NOERROR then
+ {$ENDIF UNICODE}
+    raise Exception.create('readShellLink: cannot getPath');
+ {$IFNDEF UNICODE}
+  setLength(r, strLen(PWideChar(@r[1])));
+  result := r;
+ {$ELSE UNICODE}
+  setLength(result, strLen(PChar(@result[1])));
+ {$ENDIF UNICODE}
+end; // readShellLink
+
+
 function GetThumbFromCache(AFileName: UnicodeString; out Bmp: TBitmap; AMaxSize: Integer = 120): HRESULT;
 var
   thumbcache: IThumbnailCache;
@@ -1162,7 +1216,7 @@ var
   hBmp: HBITMAP;
   pat: WTS_ALPHATYPE;
 begin
-  Result := $80000001;
+  Result := HRESULT($80000001);
  {$IFDEF FMX}
    Exit;
  {$ELSE ~FMX}
@@ -1227,9 +1281,83 @@ begin
       end;
     end;
    except
-    Result := $80000001;
+    Result := HRESULT($80000001);
   end;
  {$ENDIF FMX}
+end;
+
+
+function GetPEType(const APath: WideString): Byte;
+const
+  PE_UNKNOWN = 0; //if the file is not a valid dll, 0 is returned
+ // PE_16BIT   = 1; // not supported by this function
+  PE_32BIT   = 2;
+  PE_64BIT   = 3;
+var
+  hFile, hFileMap: THandle;
+  PMapView: Pointer;
+  PIDH: PImageDosHeader;
+  PINTH: PImageNtHeaders;
+  Base: Pointer;
+begin
+  Result := PE_UNKNOWN;
+
+  hFile := CreateFileW(PWideChar(APath), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  if hFile = INVALID_HANDLE_VALUE then
+  begin
+    CloseHandle(hFile);
+    Exit;
+  end;
+
+  hFileMap  := CreateFileMapping(hFile, nil, PAGE_READONLY, 0, 0, nil);
+  if hFileMap = 0 then
+  begin
+    CloseHandle(hFile);
+    CloseHandle(hFileMap);
+    Exit;
+  end;
+
+  PMapView := MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 0);
+  if PMapView = nil then
+  begin
+    CloseHandle(hFile);
+    CloseHandle(hFileMap);
+    Exit;
+  end;
+
+  PIDH := PImageDosHeader(PMapView);
+  if PIDH^.e_magic <> IMAGE_DOS_SIGNATURE then
+  begin
+    CloseHandle(hFile);
+    CloseHandle(hFileMap);
+    UnmapViewOfFile(PMapView);
+    Exit;
+  end;
+
+  Base := PIDH;
+  PINTH := PIMAGENTHEADERS(PtrUInt(Base) + LongWord(PIDH^._lfanew));
+  if PINTH^.Signature = IMAGE_NT_SIGNATURE then
+  begin
+    case PINTH^.OptionalHeader.Magic of
+      $10b: Result := PE_32BIT;
+      $20b: Result := PE_64BIT
+    end;
+  end;
+
+  CloseHandle(hFile);
+  CloseHandle(hFileMap);
+  UnmapViewOfFile(PMapView);
+end;
+
+//Now, if you compile your application for 32-bit and 64-bit windows, you can check if dll's bitness is same as your application's:
+function IsCorrectBitness(const APath: WideString): Boolean;
+begin
+  {$ifdef CPU32}
+    Result := GetPEType(APath) = 2; //the application is compiled as 32-bit, we ask if GetPeType returns 2
+  {$endif}
+  {$ifdef CPU64}
+    Result := GetPEType(APath) = 3; //the application is compiled as 64-bit, we ask if GetPeType returns 3
+  {$endif}
 end;
 
 end.

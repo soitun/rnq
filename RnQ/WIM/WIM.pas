@@ -16,6 +16,7 @@ uses
   Types, JSON, Generics.Collections, Threading,
   ExtCtrls, StrUtils, Math,
   OverbyteIcsHttpProt,
+  OverbyteIcsTypes,
   RnQGlobal, RnQNet, RQThemes, RDGlobal, RQUtil, RnQJSON,
   RnQPrefsTypes, groupsLib, RnQProtocol,
   WIMContacts, WIMConsts, WIM.Stickers,
@@ -610,7 +611,7 @@ uses
 {$IFDEF UNICODE}
    AnsiStrings, AnsiClasses,
 {$ENDIF UNICODE}
-  RnQZip,
+  RD.Zip,
   mormot.crypt.core,
   RnQDialogs, RnQLangs, RDUtils, RDFileUtil, RnQCrypt, Base64,
 {$IFDEF RNQ_AVATARS}

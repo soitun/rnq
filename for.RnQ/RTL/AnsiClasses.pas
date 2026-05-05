@@ -5,6 +5,13 @@ interface
 {$I ForRnQConfig.inc}
 {$I NoRTTI.inc}
 
+{$DEFINE RegExpPCodeDump} // p-code dumping (see Dump method)
+{$IFNDEF FPC} // the option is not supported in FreePascal
+ {$IFDEF INTEL}
+   {$DEFINE reRealExceptionAddr} // exceptions will point to appropriate source line, not to Error procedure
+ {$ENDIF INTEL}
+{$ENDIF}
+
 uses
   Windows, Messages, Classes, SysUtils, TypInfo, ActiveX;
 
@@ -307,13 +314,18 @@ end;
 
 procedure TAnsiStrings.Error(const Msg: string; Data: Integer);
 
-  function ReturnAddr: Pointer;
+{$IFDEF reRealExceptionAddr}
+ function ReturnAddr: pointer;
   asm
-          MOV     EAX,[EBP+4]
+   mov  eax,[ebp+4]
   end;
+{$ENDIF}
 
 begin
-  raise EStringListError.CreateFmt(Msg, [Data]) at ReturnAddr;
+  raise EStringListError.CreateFmt(Msg, [Data])
+   {$IFDEF reRealExceptionAddr}
+   At ReturnAddr;
+   {$ENDIF}
 end;
 
 procedure TAnsiStrings.Error(Msg: PResStringRec; Data: Integer);

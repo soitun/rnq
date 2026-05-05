@@ -56,7 +56,7 @@ implementation
 uses
   Windows, Base64, SysUtils, StrUtils, System.Threading, Graphics,
   RDUtils,
-  RnQPrefsInt, RnQZip,  RnQNet, Murmur2,
+  RnQPrefsInt, RD.Zip,  RnQNet, Murmur2,
 {$IFDEF UNICODE}
   AnsiStrings,
 {$ENDIF UNICODE}

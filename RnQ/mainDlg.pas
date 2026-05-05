@@ -346,7 +346,7 @@ type
       Shift: TShiftState; State: TDragState; Pt: TPoint; Mode: TDropMode;
       var Effect: Integer; var Accept: Boolean);
     procedure rosterDragDrop(Sender: TBaseVirtualTree; Source: TObject;
-      DataObject: IDataObject; Formats: TFormatArray; Shift: TShiftState;
+      DataObject: TVTDragDataObject; Formats: TFormatArray; Shift: TShiftState;
       Pt: TPoint; var Effect: Integer; Mode: TDropMode);
     procedure rosterFocusChanged(Sender: TBaseVirtualTree;
       Node: PVirtualNode; Column: TColumnIndex);
@@ -430,8 +430,8 @@ type
     procedure gmAMakeLocalUpdate(Sender: TObject);
     procedure gmAMakeLocalExecute(Sender: TObject);
     procedure cAAuthReqstUpdate(Sender: TObject);
-    procedure rosterMeasureItem(Sender: TBaseVirtualTree;
-      TargetCanvas: TCanvas; Node: PVirtualNode; var NodeHeight: Integer);
+    procedure rosterMeasureItem(Sender: TBaseVirtualTree; TargetCanvas: TCanvas;
+      Node: PVirtualNode; var NodeHeight: TDimension);
     procedure PntBarPaint(Sender: TObject);
     procedure mARequestCLUpdate(Sender: TObject);
     procedure RQHelp1Click(Sender: TObject);
@@ -552,6 +552,7 @@ uses
  {$ENDIF}
   hook,
   OverbyteIcsWSocket,
+  OverbyteIcsUtils,
   RnQFileUtil, RDFileUtil, RDUtils, RDSysUtils,
   RQUtil, RQLog, RQThemes, RnQMenu, RnQPics,
   RnQLangs, RnQStrings, RnQNet, RnQGlobal,
@@ -3332,7 +3333,7 @@ begin
 end;
 
 procedure TRnQmain.rosterMeasureItem(Sender: TBaseVirtualTree;
-  TargetCanvas: TCanvas; Node: PVirtualNode; var NodeHeight: Integer);
+  TargetCanvas: TCanvas; Node: PVirtualNode; var NodeHeight: TDimension);
 begin
 //  if Node = roaster.focusednode then
 //    NodeHeight := TVirtualDrawTree(Sender).DefaultNodeHeight * 2;
@@ -3472,9 +3473,9 @@ else
 //  accept:=(clickedDiv=destDiv) and (clickedGrp<>destGrp);
 end;
 
-procedure TRnQmain.rosterDragDrop(Sender: TBaseVirtualTree;
-  Source: TObject; DataObject: IDataObject; Formats: TFormatArray;
-  Shift: TShiftState; Pt: TPoint; var Effect: Integer; Mode: TDropMode);
+procedure TRnQmain.rosterDragDrop(Sender: TBaseVirtualTree; Source: TObject;
+  DataObject: TVTDragDataObject; Formats: TFormatArray; Shift: TShiftState;
+  Pt: TPoint; var Effect: Integer; Mode: TDropMode);
 var
   grpOrDiv, n: Tnode;
   o: integer;

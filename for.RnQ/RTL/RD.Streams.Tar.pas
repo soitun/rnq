@@ -1,4 +1,4 @@
-unit RnQNet.Uploads.Tar;
+unit RD.Streams.Tar;
 {$I forRnQConfig.inc}
 {$I NoRTTI.inc}
 
@@ -7,7 +7,7 @@ interface
 uses
   Classes,
   RDGlobal,
-  RnQNet.Uploads.Lib
+  RD.Streams.Lib
   ;
 
 type
@@ -186,7 +186,8 @@ begin
     +'100666 '#0'0000000'#0'0000000'#0 // file mode, uid, gid
     + #$80#0#0#0
     + qword_BEasStr(flist[cur].size) // file size
-    +num(flist[cur].mtime, 12)  // mtime
+//    +num(flist[cur].mtime, 12)  // mtime
+    +num(dateTimeToUnix(flist[cur].FTime), 12)  // mtime
     +FAKE_CHECKSUM
     +'0'+str('', 100)       // link properties
     +'ustar'#0'00'+str('',32) + str('',32);    // not actually used
@@ -249,7 +250,7 @@ pos:=0;
 for i:=0 to length(flist)-1 do
   with flist[i] do
     begin
-    firstByte:=pos;
+    DatafirstByte:=pos;
     inc(pos, size+headerLengthForFilename(dst));
     inc(pos, gap512(pos));
     end;
@@ -396,7 +397,7 @@ while (count > 0) and (cur < length(flist)) do
         and decide after it.
       }
       i:=headerLengthForFilename(flist[cur].dst);
-      i:=flist[cur].firstByte+i+flist[cur].size-pos;
+      i:=flist[cur].dataFirstByte+i+flist[cur].size-pos;
       if count >= i then
         where:=TW_PAD;
       // In case the file is shorter, we pad the rest with NUL bytes

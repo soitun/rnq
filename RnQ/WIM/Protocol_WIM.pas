@@ -10,6 +10,7 @@ interface
 uses
   Windows, Classes,
   OverbyteIcsHttpProt,
+  OverbyteIcsTypes,
   outboxlib, events, RnQProtocol, RnQProtoUtils,
   WIMcontacts, WIM, WIMConsts, RDGLobal;
 

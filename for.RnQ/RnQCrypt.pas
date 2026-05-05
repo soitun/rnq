@@ -24,10 +24,155 @@ uses
 type
   TSHA256Digest = THash256;
    {$ELSE }
+type
+  /// store a 128-bit buffer
+  // - e.g. an AES block
+  // - consumes 16 bytes of memory
+  TBlock128 = array[0..3] of cardinal;
+  /// pointer to a 128-bit buffer
+  PBlock128 = ^TBlock128;
      {$IFNDEF USE_WE_LIBS}
 type
-      TSHA256Digest = TBytes;
+  TSHA256Digest = TBytes;
+type
+  /// store a 128-bit hash value
+  // - e.g. a MD5 digest, or array[0..3] of cardinal (TBlock128)
+  // - consumes 16 bytes of memory
+  THash128 = array[0..15] of byte;
+  /// pointer to a 128-bit hash value
+  PHash128 = ^THash128;
+
+  /// store a 160-bit hash value
+  // - e.g. a SHA-1 digest, or array[0..4] of cardinal
+  // - consumes 20 bytes of memory
+  THash160 = array[0..19] of byte;
+  /// pointer to a 160-bit hash value
+  PHash160 = ^THash160;
+
+  /// store a 192-bit hash value
+  // - consumes 24 bytes of memory, or array[0..5] of cardinal
+  THash192 = array[0..23] of byte;
+  /// pointer to a 192-bit hash value
+  PHash192 = ^THash192;
+
+  /// store a 224-bit hash value
+  // - e.g. a SHA-224 digest, or array[0..6] of cardinal
+  // - consumes 28 bytes of memory
+  THash224 = array[0..27] of byte;
+  /// pointer to a 224-bit hash value
+  PHash224 = ^THash224;
+
+  /// store a 256-bit hash value
+  // - e.g. a SHA-256 digest, a TEccSignature result, or array[0..7] of cardinal
+  // - consumes 32 bytes of memory
+  THash256 = array[0..31] of byte;
+  /// pointer to a 256-bit hash value
+  PHash256 = ^THash256;
+
+  /// store a 512-bit hash value
+  // - e.g. a SHA-512 digest, a TEccSignature result, or array[0..15] of cardinal
+  // - consumes 64 bytes of memory
+  THash512 = array[0..63] of byte;
+  /// pointer to a 512-bit hash value
+  PHash512 = ^THash512;
+
+  /// map a 512-bit hash as an array of lower bit size values
+  // - consumes 64 bytes of memory
+  THash512Rec = packed record
+  case integer of
+  0: (
+      Lo, Hi: THash256);
+  1: (
+      h0, h1, h2, h3: THash128);
+  2: (
+      d0, d1, d2, d3, d4, d5, d6, d7: Int64);
+  3: (
+      i0, i1, i2, i3, i4, i5, i6, i7,
+      i8, i9, i10, i11, i12, i13, i14, i15: integer);
+  4: (
+      c0, c1, c2, c3: TBlock128);
+  5: (
+      b: THash512);
+  6: (
+      b160: THash160);
+//  7: (
+//      b384: THash384);
+  8: (
+      w: array[0..31] of word);
+  9: (
+      c: array[0..15] of cardinal);
+  10: (
+       i: array[0..7] of Int64);
+  11: (
+       q: array[0..7] of UInt64);
+//  12: (
+//       r: array[0..3] of THash128Rec);
+//  13: (
+//       l, h: THash256Rec);
+  end;
+  /// pointer to 512-bit hash map variable record
+  PHash512Rec = ^THash512Rec;
+  /// store several 256-bit hash map variable records
+  THash512RecDynArray = array of THash512Rec;
+
+     {$ELSE USE_WE_LIBS}
+type
+  /// map a 512-bit hash as an array of lower bit size values
+  // - consumes 64 bytes of memory
+  THash512Rec = packed record
+  case integer of
+  0: (
+      Lo, Hi: TSHA256Digest);
+  1: (
+      h0, h1, h2, h3: TMD5Digest);
+  2: (
+      d0, d1, d2, d3, d4, d5, d6, d7: Int64);
+  3: (
+      i0, i1, i2, i3, i4, i5, i6, i7,
+      i8, i9, i10, i11, i12, i13, i14, i15: integer);
+  4: (
+      c0, c1, c2, c3: TBlock128);
+  5: (
+      b: TSHA512Digest);
+  6: (
+      b160: TSHA1Digest);
+//  7: (
+//      b384: THash384);
+  8: (
+      w: array[0..31] of word);
+  9: (
+      c: array[0..15] of cardinal);
+  10: (
+       i: array[0..7] of Int64);
+  11: (
+       q: array[0..7] of UInt64);
+//  12: (
+//       r: array[0..3] of THash128Rec);
+//  13: (
+//       l, h: THash256Rec);
+  end;
+  /// pointer to 512-bit hash map variable record
+  PHash512Rec = ^THash512Rec;
+  /// store several 256-bit hash map variable records
+  THash512RecDynArray = array of THash512Rec;
      {$ENDIF USE_WE_LIBS}
+
+type
+  /// hash algorithms available for HashFile/HashFull functions
+  THashAlgo = (
+    hfSHA1,
+    hfSHA256,
+//    hfSHA384,
+//    hfSHA512,
+//    hfSHA512_256,
+//    hfSHA3_256,
+//    hfSHA3_512,
+//    hfSHA224
+    hfMD5
+    );
+
+  /// set of algorithms available for HashFile/HashFull functions and TSynHasher object
+  THashAlgos = set of THashAlgo;
    {$ENDIF USE_SYMCRYPTO}
 
 // crypting
@@ -66,11 +211,13 @@ function  MD5Pass2(const s: RawByteString): RawByteString;
 
   function SHA1toHex( const digest: RawByteString ): String;
 
+{$IFDEF USE_SYMCRYPTO}
 //  function EccCommandVerifyFile(const FileToVerify, AuthPubKey: TFileName; fileSha256: THash256): TEccValidity;
   function verifyEccSignFile(const fileName: String; sign64, publicKey: RawByteString; allowSelfSigned: Boolean = True): Boolean;
+{$ENDIF USE_SYMCRYPTO}
 
 type
-  TProgressFunc = function(p: real): Boolean;
+  TProgressFunc = function(p: real): Boolean of Object;
 
   function getFileMD5(const fn: String; progFunc: TProgressFunc): TBytes;
   function HashFile(const aFileName: TFileName; algo: THashAlgo): THash512Rec;
@@ -83,13 +230,13 @@ uses
   mormot.core.os,
   mormot.crypt.ecc,
   mormot.core.json,
-    {$ELSE not SynCrypto}
+   {$ELSE not SynCrypto}
      {$IFDEF USE_WE_LIBS}
        //use Wolfgang Ehrhardt's}
-        MD5, SHA1, HMAC, HMACSHA1, HMACSHA2,
+        MD5, SHA1, HMAC, HMACSHA1, HMACSHA2, SHA256,
      {$ENDIF USE_WE_LIBS}
      classes,
-   {$ENDIF ~USE_SYMCRYPTO}
+  {$ENDIF ~USE_SYMCRYPTO}
  {$IFDEF UNICODE}
    AnsiStrings,
 //   Character,
@@ -148,63 +295,7 @@ begin
   critt(result, key);
 end;
 
-{$IFDEF CPUX64}
-procedure critt(var s: RawByteString; key: integer);
-var
-  i: Cardinal;
-  c, d: Byte;
-  a, b: Byte;
-  p: PAnsiChar;
-begin
-  if Length(s)=0 then
-    Exit;
-  c := Byte(key);
-  d := Byte(key shr 20);
-  p := @s[1];
-
-  a := $B8;// 10111000b;
-  for i := 1 to Length(s) do
-    begin
-      b := Byte(s[i]) + c;
-      b := b xor d;
-      b := (b shr 3) or (b shl 5);
-      b := b xor a;
-
-      p^ := AnsiChar( b );
-      inc(PAnsiChar(p));
-//      s[i] := AnsiChar(b);
-      a := (a shr 3) or (a shl 5);
-    end;
-end;
-
-procedure decritt(var s: RawByteString; key: integer);
-var
-  i: Cardinal;
-  c, d: Byte;
-  a, b: Byte;
-  p: PAnsiChar;
-begin
-  if Length(s)=0 then
-    Exit;
-  c := Byte(key);
-  d := Byte(key shr 20);
-  p := @s[1];
-
-  a := $B8;// 10111000b;
-  for i := 1 to Length(s) do
-    begin
-      b := Byte(s[i]) xor a;
-      b := (b shl 3) or (b shr 5);
-      b := b xor d;
-      b := b - c;
-
-      p^ := AnsiChar( b );
-      inc(PAnsiChar(p));
-//      s[i] := AnsiChar(b);
-      a := (a shr 3) or (a shl 5);
-    end;
-end;
-{$ELSE ~CPUX64}
+{$IFDEF CPUX32}
     {$WARN UNSAFE_CODE OFF}
 procedure critt(var s: RawByteString; key: integer);
   asm
@@ -270,6 +361,62 @@ procedure decritt(var s: RawByteString; key: integer);
     POP ESI // Recommended by Пушкожук
 end; // decritt
     {$WARN UNSAFE_CODE ON}
+{$ELSE ~CPUX64}
+procedure critt(var s: RawByteString; key: integer);
+var
+  i: Cardinal;
+  c, d: Byte;
+  a, b: Byte;
+  p: PAnsiChar;
+begin
+  if Length(s)=0 then
+    Exit;
+  c := Byte(key);
+  d := Byte(key shr 20);
+  p := @s[1];
+
+  a := $B8;// 10111000b;
+  for i := 1 to Length(s) do
+    begin
+      b := Byte(s[i]) + c;
+      b := b xor d;
+      b := (b shr 3) or (b shl 5);
+      b := b xor a;
+
+      p^ := AnsiChar( b );
+      inc(PAnsiChar(p));
+//      s[i] := AnsiChar(b);
+      a := (a shr 3) or (a shl 5);
+    end;
+end;
+
+procedure decritt(var s: RawByteString; key: integer);
+var
+  i: Cardinal;
+  c, d: Byte;
+  a, b: Byte;
+  p: PAnsiChar;
+begin
+  if Length(s)=0 then
+    Exit;
+  c := Byte(key);
+  d := Byte(key shr 20);
+  p := @s[1];
+
+  a := $B8;// 10111000b;
+  for i := 1 to Length(s) do
+    begin
+      b := Byte(s[i]) xor a;
+      b := (b shl 3) or (b shr 5);
+      b := b xor d;
+      b := b - c;
+
+      p^ := AnsiChar( b );
+      inc(PAnsiChar(p));
+//      s[i] := AnsiChar(b);
+      a := (a shr 3) or (a shl 5);
+    end;
+end;
 {$ENDIF CPUX64}
 
 function calculate_KEY1(const pwd: AnsiString): integer;
@@ -774,7 +921,7 @@ begin
 end;
    {$ELSE NOT USE_SYMCRYPTO}
    {$IFDEF USE_WE_LIBS}
-function getFileMD5(fn: String; progFunc: TProgressFunc): TBytes;
+function getFileMD5(const fn: String; progFunc: TProgressFunc): TBytes;
 var
   digest: TMD5Digest;
 //  context: TMD5Context;
@@ -811,8 +958,41 @@ begin
   SetLength(Result, length(digest));
   ansiStrings.StrPLCopy(PAnsiChar(Result), PAnsiChar(@digest), length(digest));
 end;
+
+function HashFile(const aFileName: TFileName; algo: THashAlgo): THash512Rec;
+var
+  temp: RawByteString;
+  F: THandle;
+  size, tempsize: Int64;
+  read: integer;
+  err: Word;
+begin
+  FillMemory(@result.b, SizeOf(result.b), 0);
+  if aFileName = '' then
+    exit;
+//  n := 0;
+  F := FileOpenSequentialRead(aFileName);
+  if F<>0 then
+  try
+//    hasher.Init(algo);
+    GetFileSizeEx(F, size);
+    tempsize := 1 shl 20; // 1MB temporary buffer for reading
+    if tempsize > size then
+      tempsize := size;
+    SetLength(temp, tempsize);
+    if algo = hfSHA256 then
+     SHA256File(aFileName, result.Lo, temp[1], tempsize, err)
+    else if algo = hfSHA1 then
+     SHA1File(aFileName, result.b160, temp[1], tempsize, err)
+    else if algo = hfMD5 then
+     md5File(aFileName, result.h0, temp[1], tempsize, err)
+      ;
+  finally
+    FileClose(F);
+  end;
+end;
    {$ELSE !USE_WE_LIBS}
-function getFileMD5(fn: String; progFunc: TProgressFunc): TBytes;
+function getFileMD5(const fn: String; progFunc: TProgressFunc): TBytes;
 var
   digest: TBytes;
   md5: THashMD5;
@@ -879,20 +1059,29 @@ var
 begin
   Result := '';
   digest := MD5Pass2(s);
+  //Result := BinToHex(digest);
+  //ToDo - remove concatenation.
   if length(digest) > 0 then
     for i:=1 to length(digest) do
       result := result + intToHex(byte(digest[i]), 2);
 end;
 
 function SHA256PassHS(const s: RawBytestring): String; //return HEX(SHA256)
-var SHA: TSHA256;
-    Digest: TSHA256Digest;
+var
+{$IFDEF USE_SYMCRYPTO}
+  SHA: TSHA256;
+{$ENDIF USE_SYMCRYPTO}
+  Digest: TSHA256Digest;
 //var
 //  digest: RawBytestring;
   b: Byte;
 begin
   Result := '';
-  SHA.Full(pointer(s),length(s),Digest);
+{$IFDEF USE_SYMCRYPTO}
+  SHA.Full(pointer(s), length(s), Digest);
+{$ELSE !USE_SYMCRYPTO}
+  SHA256Full(Digest, PAnsiChar(s), length(s));
+{$ENDIF USE_SYMCRYPTO}
 
 //  digest := SHA256(s);
 //  if length(digest) > 0 then
@@ -901,14 +1090,21 @@ begin
 end;
 
 function SHA256PassLS(const s: RawBytestring): String; //return hex(SHA256)
-var SHA: TSHA256;
-    Digest: TSHA256Digest;
+var
+{$IFDEF USE_SYMCRYPTO}
+  SHA: TSHA256;
+{$ENDIF USE_SYMCRYPTO}
+  Digest: TSHA256Digest;
 //var
 //  digest: RawBytestring;
   b: Byte;
 begin
   Result := '';
+{$IFDEF USE_SYMCRYPTO}
   SHA.Full(pointer(s),length(s),Digest);
+{$ELSE !USE_SYMCRYPTO}
+  SHA256Full(Digest, PAnsiChar(s), length(s));
+{$ENDIF USE_SYMCRYPTO}
 
 //  digest := SHA256(s);
 //  if length(digest) > 0 then
@@ -926,6 +1122,8 @@ begin
      Result := Result + inttohex( ord( digest[i] ), 2 );
    Result := LowerCase( Result );
 end;
+
+{$IFDEF USE_SYMCRYPTO}
 
 function EccCommandVerifyFile(fileSha256: THash256; const sign64: RawByteString; const AuthPubKey: RawByteString): TEccValidity;
 //const
@@ -974,6 +1172,7 @@ begin
   v := EccCommandVerifyFile(hash, sign64, pub64);
   Result := (v = ecvValidSigned) or (allowSelfSigned and (v = ecvValidSelfSigned));
 end;
+{$ENDIF USE_SYMCRYPTO}
 
 
 end.

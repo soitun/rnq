@@ -11,6 +11,10 @@ unit RnQBinUtils;
 {$ENDIF FPC}
 { $INLINE ON}
 
+{$IFDEF ARM64EC}
+  {$DEFINE PUREPASCAL}
+{$ENDIF}
+
 interface
 
 uses
